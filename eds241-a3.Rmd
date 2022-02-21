@@ -41,16 +41,17 @@ librarian::shelf("stargazer", "here", "tidyr", "tidyverse", "dplyr","stringr", "
 
 \noindent The following code loads the data.
 
-```{r , include=TRUE}
+```{r, include=TRUE}
 # Load data
 data <- read_csv(here("SMOKING_EDS241.csv"))
 
 ```
+
 # Question 1
 
 (a) What is the unadjusted mean difference in birth weight of infants with smoking and nonsmoking mothers? Under what assumption does this correspond to the average treatment effect of maternal smoking during pregnancy on infant birth weight? Provide some simple empirical evidence for or against this assumption.
 
-```{r , include=TRUE}
+```{r, include=TRUE}
 smoker <- data %>% filter(tobacco == 1)
 nonsmoker <- data %>% filter(tobacco == 0)
 
@@ -63,20 +64,14 @@ diff <- mean_nonsmoker - mean_smoker
 
 The unadjusted mean difference in birth weight in grams for children whose mothers did not smoke versus those that did is `r diff` grams.
 
-The assumption is that smoking status is independent of y(0) and y(1) implying unconditional treatment ignorability. 
+The assumption is that smoking status is independent of all other variables implying unconditional treatment ignorability. This would mean that smoking mothers and non-smoking mothers are completely randomly assigned and no other variables have an impact on whether mother's smoke or not. 
 
-**OH NOTES**
-if you have income on lhs, whether you are a smoker or not will not be statistically different. Maybe the hypothesis is that you're testing whether the treatment status is independent of y1 y0
-What would need to be true for smoker vs nonsmoker to be the treatment effect? We have treatment ignorability. We should be working toward conditional treatment ignorability. 
 
-the hypothesis/assumpiton smoking status is independent of y(1) y(0) - unconditional treatment ignorability. We would need smoking status to be randomly assigned to mothers unconditionally. 
-
-Run a model to provide evidence 
-run income on smoking status, education on smoking status, age on smoking status - provide someeee evidence that smoking status is correlated with these variables. 
-You can do this with the mean differences between them but you want to know if they are statistically different. running the regression gives you a test statistic already. if it were true that smoking was randomly assigned then the regressions of other vars on smoking would not be statistically significant. 
 ```{r, warning=F}
-model1 <- lm_robust(mblack ~ tobacco, data = data)
-summary(model1) 
+model1 <- lm(mblack ~ tobacco, data = data)
+
+se_model = starprep(model1, stat = c("std.error"), se_type = "HC2", alpha = 0.05)
+stargazer(model1, se = se_model, type="text")
 
 ```
 
@@ -89,7 +84,9 @@ The p-value for the impact of whether the mother is black on smoking during preg
 ```{r, warning=FALSE} 
 model2 <- lm_robust(birthwgt ~ tobacco + mage + meduc + mblack + alcohol + first + diabete + anemia,
                     data = data)
+
 summary(model2)
+
 ```
 The coefficient for the average impact of tobacco on birth weight in grams is `r model2$coefficients[2]` and the standard error is `r model2$std.error[2]`.
 
@@ -129,31 +126,31 @@ TIA_table <- data_matching %>%
          w_ATT = n_obs_1 / sum(n_obs_1)) %>% #calculate weights
   mutate_if(is.numeric, round, 2) #Round data
 
-
 stargazer(TIA_table, type= "text", summary = FALSE, digits = 2)
 
-# MULTIVARIATE MATCHING ESTIMATES OF ATE AND ATT
+# MULTIVARIATE MATCHING ESTIMATE OF ATE
 ATE=sum((TIA_table$w_ATE)*(TIA_table$bwgt_diff))
 ATE
-ATT=sum((TIA_table$w_ATT)*(TIA_table$bwgt_diff))
-ATT
+
 ```
+
+The exact matching estimator has an average treatment effect of `r ATE`.
 
 ```{r}
 
-model3 <- lm_robust(birthwgt ~ tobacco + 
+model3 <- lm(birthwgt ~ tobacco + 
                       mage + meduc + mblack + alcohol + 
                       mage:meduc + mage:mblack + mage:alcohol +
                       meduc:mblack + meduc:alcohol + mblack:alcohol +
                       mage:meduc:mblack + mage:meduc:alcohol + meduc:mblack:alcohol +
                       mage:meduc:mblack:alcohol, data = data_matching)
 
-summary(model3)
+se_model = starprep(model3, stat = c("std.error"), se_type = "HC2", alpha = 0.05)
+stargazer(model3, se = se_model, type="text")
 
 ```
 
 (d) Estimate the propensity score for maternal smoking using a logit estimator and based on the following specification: mother’s age, mother’s age squared, mother’s education, and indicators for mother’s race, and alcohol consumption. 
-
 
 ```{r}
 # this is the model of the propensity score 
@@ -163,16 +160,19 @@ summary(ps_model)
 EPS <- predict(ps_model, type = "response")
 PS_WGT <- (data_matching$tobacco/EPS) + ((1-data_matching$tobacco)/(1-EPS))
 
+head(PS_WGT)
+
 ```
 
-(e) Use the propensity score weighted regression (WLS) to estimate the effect of maternal smoking on birth weight (Lecture 7, slide 12).
+(e) Use the propensity score weighted regression (WLS) to estimate the effect of maternal smoking on birth weight.
 
 ```{r}
 
 # WLS USING EPS WEIGHTS
-wls1 <- lm(birthwgt ~ tobacco, data_matching, weights=PS_WGT)
+wls1 <- lm_robust(birthwgt ~ tobacco, data_matching, weights = PS_WGT)
 summary(wls1)
-se_model = starprep(wls1, stat = c("std.error"), se_type = "HC2", alpha = 0.05)
-stargazer(wls1, se = se_model, type="text")
+
+wls2 <- lm_robust(birthwgt ~ tobacco + mage + mage_sq + meduc + mblack + alcohol, data_matching, weights = PS_WGT)
+summary(wls2)
 ```
 
